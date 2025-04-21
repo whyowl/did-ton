@@ -1,9 +1,9 @@
 /develop
 
-/example/node_modules
-/example/temp
-/example/build
-/example/dist
+example/node_modules
+example/temp
+example/build
+example/dist
 .DS_Store
 
 # VS Code
