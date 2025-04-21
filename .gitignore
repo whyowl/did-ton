@@ -1,1 +1,24 @@
 /develop
+
+/example/node_modules
+/example/temp
+/example/build
+/example/dist
+.DS_Store
+
+# VS Code
+.vscode/*
+.history/
+*.vsix
+
+# IDEA files
+.idea
+
+# VIM
+Session.vim
+.vim/
+
+# Other private editor folders
+.nvim/
+.emacs/
+.helix/
