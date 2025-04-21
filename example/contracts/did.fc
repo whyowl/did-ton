@@ -1,0 +1,97 @@
+#include "imports/stdlib.fc";
+
+const op::update_did = 0x01; ;; create an opcode from string using the "c" prefix, this results in 0x7e8764ef opcode in this case
+const op::update_controller = 0x02; ;; create an opcode from string using the "c" prefix, this results in 0x7e8764ef opcode in this case
+
+;; storage variables
+global slice controller;
+global int updated_at;
+global cell storage_type;
+global cell storage_ref;
+global int nonce;
+
+int equal_slices (slice a, slice b) asm "SDEQ";
+
+;; load_data populates storage variables using stored data
+() load_data() impure {
+    var ds = get_data().begin_parse();
+
+    controller = ds~load_msg_addr();
+    updated_at = ds~load_uint(64);
+    storage_type = ds~load_ref(); ;; изменено с load_ref на load_slice
+    storage_ref = ds~load_ref();   ;; изменено с load_ref на load_slice
+    nonce = ds~load_uint(32);
+
+    ds.end_parse();
+}
+
+;; save_data stores storage variables as a cell into persistent storage
+() save_data() impure {
+    set_data(
+        begin_cell()
+            .store_slice(controller)
+            .store_uint(updated_at, 64)
+            .store_ref(storage_type)  ;; сохраняем slice в ref
+            .store_ref(storage_ref)
+            .store_uint(nonce, 32)
+            .end_cell()
+    );
+}
+
+;; recv_internal is the main function of the contract and is called when it receives a message from other contracts
+() recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
+    if (in_msg_body.slice_empty?()) { ;; ignore all empty messages
+        return ();
+    }
+
+    slice cs = in_msg_full.begin_parse();
+    int flags = cs~load_uint(4);
+    if (flags & 1) { ;; ignore all bounced messages
+        return ();
+    }
+
+    load_data(); ;; here we populate the storage variables
+
+    int op = in_msg_body~load_uint(32); ;; by convention, the first 32 bits of incoming message is the op
+    slice sender = in_msg_body~load_msg_addr();
+    int query_id = in_msg_body~load_uint(64); ;; also by convention, the next 64 bits contain the "query id", although this is not always the case
+
+
+    throw_if(100, ~ equal_slices(sender, controller));
+    ;;ifnot (sender == controller) {
+    ;;    throw(100); ;; Not authorized
+    ;;}
+
+    if (op == op::update_did) {
+        ;; update_did_info(storage_type, storage_ref)
+        storage_type = in_msg_body~load_ref();
+        storage_ref = in_msg_body~load_ref();
+        updated_at = now();
+        save_data();
+        return ();
+    }
+    if (op == op::update_controller) {
+        ;; update_controller(new_controller)
+        controller = in_msg_body~load_msg_addr();
+        save_data();
+        return ();
+    }
+
+    throw(0x101); ;; if the message contains an op that is not known to this contract, we throw
+}
+
+;; get methods are a means to conveniently read contract data using, for example, HTTP APIs
+;; they are marked with method_id
+;; note that unlike in many other smart contract VMs, get methods cannot be called by other contracts
+
+(cell, cell, int) get_did_info() method_id {
+    load_data();
+    return (storage_type, storage_ref, updated_at);
+}
+
+slice get_controller() method_id {
+    load_data();
+    return controller;
+}
+
+
